@@ -1,0 +1,7 @@
+as_of_date,filing_type,source_filing_url,source_filing_local,cumulative_btc,shares_mstr_class_a,shares_mstr_class_b,shares_strk,shares_strf,shares_strd,shares_strc,shares_stre,cover_page_as_of,cover_page_class_a,cover_page_class_b,notes
+2024-09-30,10-Q,https://www.sec.gov/Archives/edgar/data/1050446/000095017024119263/mstr-20240930.htm,filings/10-Q/2024-09-30_mstr-10-q.htm,252220,183000000,19640000,,,,,,"October 21, 2024",183003980,19640250,
+2024-12-31,10-K,https://www.sec.gov/Archives/edgar/data/1050446/000095017025021814/mstr-20241231.htm,filings/10-K/2024-12-31_mstr-10-k.htm,447470,226138000,19640000,,,,,,"February 4, 2025",237711607,19640250,
+2025-03-31,10-Q,https://www.sec.gov/Archives/edgar/data/1050446/000095017025063536/mstr-20250331.htm,filings/10-Q/2025-03-31_mstr-10-q.htm,528185,246537000,19640000,7650000,8500000,,,,,,,
+2025-06-30,10-Q,https://www.sec.gov/Archives/edgar/data/1050446/000095017025102209/mstr-20250630.htm,filings/10-Q/2025-06-30_mstr-10-q.htm,597325,261318000,19640000,12201000,10067000,11765000,,,,,,
+2025-09-30,10-Q,https://www.sec.gov/Archives/edgar/data/1050446/000119312525262568/mstr-20250930.htm,filings/10-Q/2025-09-30_mstr-10-q.htm,640031,267468000,19640000,13606000,11948000,12322000,28011000,,"October 30, 2025",267713485,19640250,
+2025-12-31,10-K,https://www.sec.gov/Archives/edgar/data/1050446/000105044626000020/mstr-20251231.htm,filings/10-K/2025-12-31_mstr-10-k.htm,672500,292422000,19640000,13982000,12840000,14024000,29587000,7750000,"February 13, 2026",314112458,19640250,

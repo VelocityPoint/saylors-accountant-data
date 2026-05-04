@@ -1,0 +1,112 @@
+tranche_date,security,program,shares,usd_net_m,note
+# Override / supplement file for per-(date, security) tranche legs.
+#
+# When TranchePartCatalog encounters a Mixed-* tranche row whose
+# raise_instrument is empty, narrative-only, or contains a known
+# parser error (e.g. the auto-extracted "$21000.0M" bug for some
+# 2025-06 STRF rows), legs added here REPLACE whatever the parser
+# would otherwise produce for that (date, security) pair.
+#
+# Lines starting with `#` are ignored. Order doesn't matter.
+#
+# Source for the values: the underlying 8-K's "ATM Program Summary"
+# table. That table contains per-security shares + net proceeds.
+# `data/saylors-accountant/filings/8-K/{date}_form-8-k_*.pdf` is the
+# canonical reference; URLs are also in tranches.csv `primary_filing_url`.
+#
+# Schema:
+#   tranche_date  - 8-K date as yyyy-MM-dd (matches tranches.csv)
+#   security      - MSTR | STRK | STRF | STRD | STRC | STRE | Convert
+#   program       - ATM | IPO | Convertible
+#   shares        - shares issued for this leg (integer)
+#   usd_net_m     - net proceeds in $M (e.g. 547.7 = $547.7M)
+#   note          - free-text source citation; quoted if it contains commas
+#
+# 17 unparsed Mixed rows currently need entries here. Examples below
+# (replace numbers with values from each 8-K's program-summary table).
+#
+# ── 2024-11-25: Mixed-AtmCommon+Convert2029 ────────────────────────
+# Convert leg parses today via raise_instrument; Common ATM leg needs shares.
+# 2024-11-25,MSTR,ATM,5597849,2460.0,"Oct 30 2024 Sales Agreement"
+# 2024-11-25,Convert,Convertible,0,2970.0,"2029 0% Convertible Notes — no equity"
+#
+# ── 2025-07-14 / 07-21: Mixed-AtmCommon+AtmStrk+AtmStrf+AtmStrd ────
+# Auto-extractor only got the Total row. Need per-leg shares + USD.
+# 2025-07-14,MSTR,ATM,?,?,
+# 2025-07-14,STRK,ATM,?,?,
+# 2025-07-14,STRF,ATM,?,?,
+# 2025-07-14,STRD,ATM,?,?,
+#
+# ── 2025-06-{09,16,23,30}: $21000.0M parser bug overrides ──────────
+# raise_instrument has buggy "$21000.0M" — likely meant to be smaller.
+# Override with correct per-leg values from the underlying 8-K table.
+# 2025-06-09,STRK,ATM,?,?,
+# 2025-06-09,STRF,ATM,432679,21.0,"corrects $21000.0M parser bug"
+#
+# Once populated, restart the server. TranchePartCatalog reloads at startup.
+
+# ── 2025-06-09: Mixed-AtmStrk+AtmStrf ─────────────────────────────
+2025-06-09,STRK,ATM,626639,66.4,"8-K ATM Program Summary: 626,639 STRK @ $66.4M net"
+2025-06-09,STRF,ATM,432679,45.8,"8-K ATM Program Summary: 432,679 STRF @ $45.8M net"
+
+# ── 2025-06-23: Mixed-AtmStrk+AtmStrf ─────────────────────────────
+2025-06-23,STRK,ATM,166566,17.4,"8-K ATM Program Summary: 166,566 STRK @ $17.4M net"
+2025-06-23,STRF,ATM,84354,8.7,"8-K ATM Program Summary: 84,354 STRF @ $8.7M net"
+
+# ── 2025-06-30: Mixed-AtmCommon+AtmStrk+AtmStrf ───────────────────
+2025-06-30,MSTR,ATM,1354500,519.5,"8-K ATM Program Summary: 1,354,500 MSTR @ $519.5M net"
+2025-06-30,STRK,ATM,276071,28.9,"8-K ATM Program Summary: 276,071 STRK @ $28.9M net"
+2025-06-30,STRF,ATM,284225,29.7,"8-K ATM Program Summary: 284,225 STRF @ $29.7M net"
+
+# ── 2025-07-14: Mixed-AtmCommon+AtmStrk+AtmStrf+AtmStrd ───────────
+2025-07-14,MSTR,ATM,797008,330.9,"8-K ATM Program Summary: 797,008 MSTR @ $330.9M net"
+2025-07-14,STRK,ATM,573976,71.1,"8-K ATM Program Summary: 573,976 STRK @ $71.1M net"
+2025-07-14,STRF,ATM,444005,55.3,"8-K ATM Program Summary: 444,005 STRF @ $55.3M net"
+2025-07-14,STRD,ATM,158278,15.0,"8-K ATM Program Summary: 158,278 STRD @ $15.0M net"
+
+# ── 2025-07-21: Mixed-AtmCommon+AtmStrk+AtmStrf+AtmStrd ───────────
+2025-07-21,MSTR,ATM,1636373,736.4,"8-K ATM Program Summary: 1,636,373 MSTR @ $736.4M net"
+2025-07-21,STRK,ATM,5441,0.7,"8-K ATM Program Summary: 5,441 STRK @ $0.7M net"
+2025-07-21,STRF,ATM,2000,0.2,"8-K ATM Program Summary: 2,000 STRF @ $0.2M net"
+2025-07-21,STRD,ATM,31282,3.0,"8-K ATM Program Summary: 31,282 STRD @ $3.0M net"
+
+# ── 2025-09-15: Mixed-AtmStrk+AtmStrf+AtmStrd ─────────────────────
+2025-09-15,STRF,ATM,302503,34.0,"8-K ATM Program Summary: 302,503 STRF @ $34.0M net"
+2025-09-15,STRK,ATM,181228,17.3,"8-K ATM Program Summary: 181,228 STRK @ $17.3M net"
+2025-09-15,STRD,ATM,208175,16.9,"8-K ATM Program Summary: 208,175 STRD @ $16.9M net"
+
+# ── 2025-09-22: Mixed-AtmCommon+AtmStrf ───────────────────────────
+2025-09-22,STRF,ATM,173834,19.4,"8-K ATM Program Summary: 173,834 STRF @ $19.4M net"
+2025-09-22,MSTR,ATM,227401,80.6,"8-K ATM Program Summary: 227,401 MSTR @ $80.6M net"
+
+# ── 2025-09-29: Mixed-AtmCommon+AtmStrf+AtmStrd ───────────────────
+# Raise ($128.1M) exceeds BTC spend ($22M) — buffer-building week.
+2025-09-29,STRF,ATM,101713,11.3,"8-K ATM Program Summary: 101,713 STRF @ $11.3M net"
+2025-09-29,STRD,ATM,5000,0.4,"8-K ATM Program Summary: 5,000 STRD @ $0.4M net"
+2025-09-29,MSTR,ATM,347352,116.4,"8-K ATM Program Summary: 347,352 MSTR @ $116.4M net"
+
+# ── 2025-10-27: Mixed-AtmStrk+AtmStrf+AtmStrd ─────────────────────
+2025-10-27,STRF,ATM,175634,19.4,"8-K ATM Program Summary: 175,634 STRF @ $19.4M net"
+2025-10-27,STRK,ATM,191404,17.0,"8-K ATM Program Summary: 191,404 STRK @ $17.0M net"
+2025-10-27,STRD,ATM,87462,7.0,"8-K ATM Program Summary: 87,462 STRD @ $7.0M net"
+
+# ── 2025-11-10: Mixed-AtmStrk+AtmStrf+AtmStrd+AtmStrc ─────────────
+2025-11-10,STRF,ATM,165614,18.3,"8-K ATM Program Summary: 165,614 STRF @ $18.3M net"
+2025-11-10,STRC,ATM,262311,26.2,"8-K ATM Program Summary: 262,311 STRC @ $26.2M net"
+2025-11-10,STRK,ATM,50881,4.5,"8-K ATM Program Summary: 50,881 STRK @ $4.5M net"
+2025-11-10,STRD,ATM,12800,1.0,"8-K ATM Program Summary: 12,800 STRD @ $1.0M net"
+
+# ── 2025-12-08: Mixed-AtmCommon+AtmStrd ───────────────────────────
+2025-12-08,STRD,ATM,442536,34.9,"8-K ATM Program Summary: 442,536 STRD @ $34.9M net"
+2025-12-08,MSTR,ATM,5127684,928.1,"8-K ATM Program Summary: 5,127,684 MSTR @ $928.1M net"
+
+# ── 2025-12-15: 8-K shows STRF+STRK+STRD+MSTR (footnote citations) ─
+# tranches.csv funding_source label may differ; legs reflect actual table.
+2025-12-15,STRF,ATM,163306,18.0,"8-K ATM Program Summary: 163,306 STRF @ $18.0M net"
+2025-12-15,STRK,ATM,7036,0.6,"8-K ATM Program Summary: 7,036 STRK @ $0.6M net"
+2025-12-15,STRD,ATM,1029202,82.2,"8-K ATM Program Summary: 1,029,202 STRD @ $82.2M net"
+2025-12-15,MSTR,ATM,4789664,888.2,"8-K ATM Program Summary: 4,789,664 MSTR @ $888.2M net"
+
+# ── 2026-01-12: Mixed-AtmCommon+AtmStrc ───────────────────────────
+2026-01-12,STRC,ATM,1192262,119.1,"8-K ATM Program Summary: 1,192,262 STRC @ $119.1M net"
+2026-01-12,MSTR,ATM,6827695,1128.5,"8-K ATM Program Summary: 6,827,695 MSTR @ $1,128.5M net"

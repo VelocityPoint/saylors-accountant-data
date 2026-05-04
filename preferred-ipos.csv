@@ -1,0 +1,6 @@
+ticker,ipo_date,shares_sold,net_proceeds_reported,currency_raised,net_proceeds_usd,eur_usd_rate_pinned,liquidation_preference_k,shares_outstanding_20251231_k,source_filing,notes
+STRK,2025-02-05,7300000,563200000,USD,563200000,,1398195,13982,filings/10-K/2025-12-31_mstr-10-k.htm,"First preferred IPO. 8% fixed coupon. Convertible (per SPEC; S-1 needed to confirm conversion mechanics)."
+STRF,2025-03-25,8500000,710900000,USD,710900000,,1363151,12840,filings/10-K/2025-12-31_mstr-10-k.htm,"Second preferred IPO. 10% fixed perpetual."
+STRD,2025-06-10,11764700,979500000,USD,979500000,,1402422,14024,filings/10-K/2025-12-31_mstr-10-k.htm,"Third preferred IPO. 10% fixed perpetual. Differences vs STRF TBD from S-1."
+STRC,2025-07-29,28011111,2473800000,USD,2473800000,,2958706,29587,filings/10-K/2025-12-31_mstr-10-k.htm,"Fourth preferred IPO. Variable rate. Largest of the five by proceeds."
+STRE,2025-11-13,7750000,608700000,EUR,707100000,1.16,909850,7750,filings/10-K/2025-12-31_mstr-10-k.htm,"Fifth preferred IPO. 10% fixed perpetual. EUR-denominated: €608.7M net proceeds = ~$707.1M at issuance-date EUR/USD of 1.16. Only EUR-denominated preferred in the stack."

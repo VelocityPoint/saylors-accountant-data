@@ -1,0 +1,6 @@
+ticker,price_usd,as_of,note
+STRK,87.00,2026-04-24,"8% coupon — discount-to-par drives 9.20% market yield"
+STRF,96.00,2026-04-24,"10% coupon — small discount, 10.42% yield"
+STRD,82.00,2026-04-24,"10% coupon — deepest discount, 12.20% yield. Not ATMed at this level (negative ATM accretion vs. par)."
+STRC,99.85,2026-04-24,"Variable coupon — designed to hover near $100 par. ATMed only when at/above par, typically the 7-10 days before ex-div."
+STRE,98.00,2026-04-24,"10% coupon — USD-equivalent of EUR price. Less liquid; estimate."

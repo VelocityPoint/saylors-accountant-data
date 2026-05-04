@@ -1,0 +1,107 @@
+# Saylor's Accountant — Securities catalog
+#
+# One entry per publicly-traded security issued by Strategy (formerly
+# MicroStrategy). See SPEC.md §3.1 for field definitions.
+#
+# Note: the ticker for Strategy's common stock is MSTR. Until mid-2025
+# the issuer traded as "MicroStrategy Incorporated"; it has since
+# rebranded to "Strategy." The ticker and CIK are unchanged, so we use
+# MSTR throughout regardless of the filing's issuer name.
+#
+# All five preferred IPOs are confirmed from the 2025 10-K §"Initial
+# Public Offerings of Preferred Stock" (see preferred-ipos.csv for the
+# structured table). Coupon rates verified from the 10-K balance sheet
+# and the 2026-04-20 8-K registered-securities table.
+
+securities:
+  - ticker: MSTR
+    name: Strategy (fka MicroStrategy) Class A Common Stock
+    kind: Common
+    coupon_rate: null
+    pay_frequency: null
+    par_value: 0.001
+    currency: USD
+    notes: |
+      Par $0.001. 10-for-1 stock split announced 2024-07-11 with record
+      date 2024-08-01 and distribution 2024-08-07; split-adjusted
+      trading began 2024-08-08. All historical share counts in
+      tranches.csv are retroactively adjusted per the 2024-11-25 8-K
+      footnote. MSTR has never paid a dividend and the issuer has
+      repeatedly stated it does not intend to.
+
+  - ticker: STRK
+    name: Strike (8.00% Series A Perpetual Strike Preferred Stock)
+    kind: PreferredConvertible    # TBD — confirm against S-1/prospectus
+    coupon_rate: 0.08
+    pay_frequency: null           # TBD — from S-1
+    par_value: 0.001
+    currency: USD
+    first_issued: 2025-02-05
+    notes: |
+      IPO 2025-02-05: 7,300,000 shares at net proceeds of $563.2M.
+      Shares outstanding as of 2025-12-31: 13,982,000 (per 10-K
+      balance sheet) — post-IPO ATM activity added ~6.68M shares
+      through year-end. S-1 still needed for pay frequency, conversion
+      mechanics, and liquidation preference beyond the $1,398,195K
+      reported in the 10-K.
+
+  - ticker: STRF
+    name: Strife (10.00% Series A Perpetual Strife Preferred Stock)
+    kind: PreferredPerpetual
+    coupon_rate: 0.10
+    pay_frequency: null           # TBD
+    par_value: 0.001
+    currency: USD
+    first_issued: 2025-03-25
+    notes: |
+      IPO 2025-03-25: 8,500,000 shares at net proceeds of $710.9M.
+      Shares outstanding as of 2025-12-31: 12,840,000. Liquidation
+      preference $1,363,151K.
+
+  - ticker: STRD
+    name: Stride (10.00% Series A Perpetual Stride Preferred Stock)
+    kind: PreferredPerpetual
+    coupon_rate: 0.10
+    pay_frequency: null           # TBD
+    par_value: 0.001
+    currency: USD
+    first_issued: 2025-06-10
+    notes: |
+      IPO 2025-06-10: 11,764,700 shares at net proceeds of $979.5M.
+      Shares outstanding as of 2025-12-31: 14,024,000. Liquidation
+      preference $1,402,422K. Differences vs STRF TBD from S-1.
+
+  - ticker: STRC
+    name: Stretch (Variable Rate Series A Perpetual Stretch Preferred Stock)
+    kind: PreferredPerpetual
+    coupon_rate: null             # VARIABLE — formula in S-1
+    pay_frequency: null           # TBD
+    par_value: 0.001
+    currency: USD
+    first_issued: 2025-07-29
+    notes: |
+      IPO 2025-07-29: 28,011,111 shares at net proceeds of $2,473.8M —
+      by far the largest preferred IPO. Shares outstanding as of
+      2025-12-31: 29,587,000. Liquidation preference $2,958,706K.
+      Coupon is variable-rate (not a fixed percent); formula and reset
+      mechanics must come from the S-1.
+
+  - ticker: STRE
+    name: Stream (10.00% Series A Perpetual Stream Preferred Stock, EUR-denominated)
+    kind: PreferredPerpetual
+    coupon_rate: 0.10
+    pay_frequency: null           # TBD
+    par_value: 0.001
+    currency: EUR
+    first_issued: 2025-11-13
+    notes: |
+      IPO 2025-11-13: 7,750,000 shares at net proceeds of €608.7M,
+      approximately $707.1M USD at the issuance-date EUR/USD rate of
+      1.16 (per 2025 10-K footnote 2). Shares outstanding as of
+      2025-12-31: 7,750,000. Liquidation preference $909,850K
+      (USD-equivalent reporting on the 10-K balance sheet).
+
+      STRE is the only EUR-denominated preferred in Strategy's capital
+      stack. Coupon payments will be EUR-denominated; each payment in
+      dividends.csv must carry a pinned EUR/USD rate for the pay week
+      per SPEC §4.5.
