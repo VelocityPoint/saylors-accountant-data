@@ -7,7 +7,69 @@
 //
 // Usage: node data/saylors-accountant/scripts/build-tranches.mjs
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+// Lazy-loaded inventory of files actually present in filings/8-K/, keyed
+// by date prefix (yyyy-mm-dd) → array of full filenames sharing that date.
+// Multiple files can share a date (e.g. a regular weekly tranche AND a
+// special 8-K announcing an ATM expansion both filed the same day), so the
+// map values are arrays not single filenames (Codex P2 caught the
+// single-value version pointing rows at the wrong file when dates collide).
+let _filingsByDate = null;
+function filingsByDate() {
+  if (_filingsByDate) return _filingsByDate;
+  const dir = fileURLToPath(new URL('../filings/8-K/', import.meta.url));
+  const map = new Map();
+  if (existsSync(dir)) {
+    for (const f of readdirSync(dir)) {
+      if (!f.match(/\.(pdf|htm)$/i)) continue;
+      // First 10 chars are the yyyy-mm-dd date prefix our naming convention
+      // mandates. Files without that prefix are ignored.
+      const date = f.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (!map.has(date)) map.set(date, []);
+      map.get(date).push(f);
+    }
+  }
+  _filingsByDate = map;
+  return map;
+}
+
+function resolveFilingLocal(date, derivedName) {
+  const candidates = filingsByDate().get(date) ?? [];
+  if (candidates.length === 0) {
+    // No on-disk match → fall back to the strategy.com-derived name
+    // (download-8ks.mjs will create it on the next run).
+    return derivedName ? `filings/8-K/${date}_${derivedName}` : '';
+  }
+  if (candidates.length === 1) {
+    // Unambiguous — single file for this date prefix.
+    return `filings/8-K/${candidates[0]}`;
+  }
+  // Multiple files share this date. Prefer an exact derived-basename match
+  // (e.g. row's strategy.com filename matches one of the candidates).
+  // Without this disambiguation, picking the alphabetically-first file
+  // could send a row to the wrong 8-K (e.g. the special-event one instead
+  // of the weekly tranche), and download-8ks would skip the intended
+  // download because a file already exists at the chosen path.
+  if (derivedName) {
+    const expected = `${date}_${derivedName}`;
+    if (candidates.includes(expected)) {
+      return `filings/8-K/${expected}`;
+    }
+  }
+  // Fallback: prefer .pdf over .htm (older filings were PDF-only; HTM-only
+  // is the new EDGAR iXBRL pattern). Stable secondary sort by filename so
+  // the choice is deterministic.
+  const sorted = [...candidates].sort((a, b) => {
+    const aPdf = a.endsWith('.pdf') ? 0 : 1;
+    const bPdf = b.endsWith('.pdf') ? 0 : 1;
+    if (aPdf !== bPdf) return aPdf - bPdf;
+    return a.localeCompare(b);
+  });
+  return `filings/8-K/${sorted[0]}`;
+}
 
 const raw = JSON.parse(
   readFileSync(new URL('../raw/strategy-purchases.json', import.meta.url), 'utf8'),
@@ -90,6 +152,38 @@ const SEEDED = {
     raise_instrument: 'STRE IPO portion + STRK/STRF/STRC ATMs (closed-loop proxy: raise ≈ BTC spend)',
     notes: 'STRE IPO net $707.1M closed 2025-11-13; this 8-K mixes IPO residual + ATMs.',
   },
+  // 2025-12-31: 3-BTC stub purchase reported in the same 2026-01-05-filed 8-K
+  // as row 93 (the 1,283-BTC main purchase). Both rows' primary_filing_local
+  // resolves to byte-identical PDFs (form-8-k_01-05-2026.pdf), so parse-8ks
+  // extracts the SAME $116.3M Total for both — double-counting the same
+  // disclosure event (Codex P1 on PR #262). Override here with the closed-
+  // loop proxy so the small stub doesn't carry the full ATM Total.
+  92: {
+    funding_source: 'AtmCommon',
+    // strategy.com posts 280,000 (rounded $0.3M aggregate) but the 8-K
+    // L1-audit value is btc × avg_price = 3 × $88,210.02 = $264,630.
+    // Override usd_spent so the L1 ledger doesn't flag a 5.49% variance.
+    usd_spent: 264630,
+    raise_net_proceeds_usd: 264630,
+    raise_shares_issued: 0,
+    raise_debt_principal_usd: 0,
+    raise_instrument: 'Closed-loop proxy: 3-BTC stub purchase reported alongside row 93 in same 8-K',
+    notes: '8-K displays $0.3M aggregate (rounded to nearest $100K); CSV stores precise btc × avg_price = 3 × $88,210.02 = $264,630 per L1 audit. Same 8-K as row 93; raise pinned to closed-loop proxy.',
+  },
+  // 2026-04-27 weekly tranche — first EDGAR iXBRL HTM 8-K format.
+  // pdftotext-shaped parser can't handle iXBRL, so parse-8ks skips this
+  // row via HTM_SEEDED_ALLOWLIST. SEED here so build-tranches doesn't
+  // regenerate it as funding_source=TBD (silent regression risk flagged
+  // by Codex P1 + Copilot on PR #261). Data hand-transcribed from the
+  // 8-K in PR #223; matches the ATM Update table verbatim.
+  108: {
+    funding_source: 'AtmCommon',
+    raise_net_proceeds_usd: 255000000,
+    raise_shares_issued: 1451601,
+    raise_debt_principal_usd: 0,
+    raise_instrument: 'MSTR ATM (1,451,601 sh, $255.0M net)',
+    notes: 'EDGAR iXBRL-HTM 8-K format (no companion strategy.com IR PDF). Share counts derived as prior + ATM-issued. KPI fields not in this 8-K format; see strategy.com/purchases dashboard.',
+  },
 };
 
 // Rows 1-41 pre-date the BTC-yield-reporting era and are out of scope per
@@ -169,7 +263,7 @@ for (const [i, r] of rows.entries()) {
   const id = `mstr-${date}`;
   const filingUrl = r.sec?.url ?? '';
   const filingName = r.sec?.filename ?? '';
-  const filingLocal = filingName ? `filings/8-K/${date}_${filingName}` : '';
+  const filingLocal = resolveFilingLocal(date, filingName);
 
   out.push([
     rowIndex,
@@ -180,7 +274,12 @@ for (const [i, r] of rows.entries()) {
     filingUrl,
     filingLocal,
     r.count,
-    r.total_purchase_price,
+    // usd_spent: SEEDED override beats strategy.com when strategy.com has a
+    // transcription anomaly. Row 92 is the canonical case — strategy.com
+    // posted 280,000 for a 3-BTC stub that math-verifies at $264,630
+    // (3 × $88,210.02). Without the override, regen would fail the L1 audit
+    // at 5.49% variance. SEEDED wins; strategy.com value is the fallback.
+    mergedField(rowIndex, 'usd_spent') ?? r.total_purchase_price,
     r.purchase_price,
     r.btc_holdings,
     r.average_price,
@@ -195,7 +294,10 @@ for (const [i, r] of rows.entries()) {
     seeded(rowIndex, 'raise_net_proceeds_usd'),
     seeded(rowIndex, 'raise_shares_issued'),
     seeded(rowIndex, 'raise_debt_principal_usd'),
-    raiseDelta(rowIndex, r.total_purchase_price),
+    // Use the effective usd_spent (post-SEEDED-override) for the delta, not
+    // the raw strategy.com value — otherwise rows that override usd_spent
+    // (row 92) emit a phantom delta against strategy.com's stale value.
+    raiseDelta(rowIndex, mergedField(rowIndex, 'usd_spent') ?? r.total_purchase_price),
     seeded(rowIndex, 'raise_instrument'),
     seeded(rowIndex, 'notes'),
   ].map(csvCell).join(','));

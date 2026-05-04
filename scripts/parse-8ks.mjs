@@ -658,9 +658,42 @@ const targetRows = rows.filter((r) => Number(r.strategy_row_index) >= 42);
 
 console.log(`parsing ${targetRows.length} post-ATM-era rows...`);
 
+// Allowlist of HTM-format row indexes whose data is HAND-SEEDED in
+// build-tranches.mjs SEEDED dict. Skipping these here is safe — the SEEDED
+// values fill in funding/raise on the second build pass.
+//
+// HTM rows NOT in this allowlist are treated as failures: without seeding,
+// the row would re-emit as funding_source=TBD with blank raise fields, which
+// is exactly the silent partial-refresh regression Codex (P1) and Copilot
+// flagged on this PR. Adding a new HTM row to the data tree therefore
+// requires updating BOTH this allowlist AND build-tranches.mjs SEEDED — the
+// coupling is intentional so neither half can drift silently.
+//
+// A proper iXBRL parser (cheerio-based or direct XBRL fact extraction) is
+// the long-term fix; until then this allowlist is the gate.
+const HTM_SEEDED_ALLOWLIST = new Set([
+  108,  // 2026-04-27 weekly tranche — first EDGAR iXBRL HTM 8-K format
+]);
+
 const results = [];
 let missingTxt = 0;
+let skippedHtmSeeded = 0;
 for (const r of targetRows) {
+  if (r.primary_filing_local.endsWith('.htm')) {
+    const idx = Number(r.strategy_row_index);
+    if (HTM_SEEDED_ALLOWLIST.has(idx)) {
+      console.log(`row ${idx} ${r.date_of_purchase}: HTM filing, in HAND-SEEDED allowlist — skipping (data is in build-tranches SEEDED)`);
+      skippedHtmSeeded++;
+      continue;
+    }
+    console.error(
+      `row ${idx} ${r.date_of_purchase}: HTM filing NOT in HAND-SEEDED allowlist — refusing to silently regenerate as TBD. ` +
+      `Add this row to BOTH build-tranches.mjs SEEDED dict AND scripts/parse-8ks.mjs HTM_SEEDED_ALLOWLIST, ` +
+      `OR implement an iXBRL parser path.`
+    );
+    missingTxt++;
+    continue;
+  }
   // path.join handles both Windows and POSIX separators correctly. The
   // earlier `replace(/\//g, '\\')` was Windows-only and produced literal
   // backslashes in filenames on Linux runners.
@@ -772,6 +805,9 @@ if (legBalanceFailures.length > 0) {
 }
 
 console.log(`\nwrote ${OUT_JSON.pathname}`);
+if (skippedHtmSeeded > 0) {
+  console.log(`parse-8ks: ${skippedHtmSeeded} HTM row(s) skipped via HAND-SEEDED allowlist.`);
+}
 
 // Strict by default: any missing .txt indicates pdftotext didn't run for
 // that row (or its output was deleted). Skipping those rows would silently
