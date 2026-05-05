@@ -27,12 +27,15 @@
 // Schema match (`StrcRateHistory.cs`):
 //   period_start (yyyy-MM-dd), annual_rate (decimal, e.g. 0.0900), note (str)
 //
-// Row convention: 10 rows, one per dividend month from August 2025 (the
-// first STRC dividend after the 2025-07-29 IPO) through May 2026. Each
-// row's `period_start` is the date the rate becomes effective for the
-// month, matching how the loader's `RateOn(date)` lookup is used:
+// Row convention: one row per dividend month from August 2025 (the first
+// STRC dividend after the 2025-07-29 IPO) through whichever is later: the
+// latest 8-K-effective month, or the current calendar month. The CSV grows
+// by one row per month going forward; date helpers below handle leap years
+// correctly so the auto-extension is safe past Feb 2028. Each row's
+// `period_start` is the date the rate becomes effective for the month,
+// matching how the loader's `RateOn(date)` lookup is used:
 //   - Row 1 → period_start = 2025-07-29 (IPO declaration date, covers Aug)
-//   - Rows 2-10 → period_start = end-of-prior-month (e.g. 2025-08-29 for
+//   - Rows 2-N → period_start = end-of-prior-month (e.g. 2025-08-31 for
 //     September's rate). This matches the seeded-PLACEHOLDER cadence and
 //     keeps the loader's at-or-before semantics intact.
 //
@@ -101,10 +104,18 @@ function lastDayOfPriorMonth(yyyymm) {
   // "2025-09" → "2025-08-31" (last day of August). Used to pick the
   // period_start for September's rate: announcement-grade date that's
   // the end of the prior month.
+  //
+  // Uses the JS Date trick: day 0 of month N is the last day of month N-1.
+  // Handles leap years correctly (Feb 2028 → 29 days). The prior hardcoded
+  // 28-day February broke for any year with Feb 29 once the script's end
+  // month started auto-extending forward via the dynamic floor (#250 PR;
+  // Copilot caught the leap-year regression on review).
   const prev = prevMonth(yyyymm);
   const [y, m] = prev.split('-').map(Number);
-  // Days in month (non-leap is fine — 2025 + 2026 = no Feb 29)
-  const days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
+  // new Date(year, monthIndex, 0) returns the last day of the prior month
+  // (monthIndex is 0-based, so passing 1-based m here gives us "day 0 of
+  // month m+1" = last day of month m). UTC to avoid local-timezone drift.
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
   return `${y}-${String(m).padStart(2, '0')}-${String(days).padStart(2, '0')}`;
 }
 
@@ -185,18 +196,24 @@ function main() {
   }
 
   // ── Determine end month ──
-  // We extend one month past the latest known announcement so the "current
-  // month" always has a row even before its rate-change 8-K is filed.
-  // Cap at 9 months past IPO month (10 rows total) for now to match the
-  // existing CSV's 10-row schema; can be lifted later.
+  // Extend the table out to whichever is later: the latest announcement's
+  // effective month, or the current calendar month. The current-month
+  // floor ensures the "current month" row always exists in the CSV even
+  // before that month's rate-change 8-K is filed (the page's RateOn(date)
+  // lookup would otherwise fall off the end of the table).
+  //
+  // Used to be hardcoded '2026-05' (#250 sub-item 3) — that worked when
+  // the script first shipped in early 2026 but doesn't auto-extend, so
+  // the floor stops doing useful work as soon as the calendar advances
+  // past it. Replaced with a clock-derived current-month value so the
+  // floor moves forward each month without touching this script.
   let endMonth = FIRST_DIV_MONTH;
   for (const a of announcements) {
     if (a.effectiveMonth > endMonth) endMonth = a.effectiveMonth;
   }
-  // Always emit at least 10 rows (Aug 2025 → May 2026) to match the
-  // existing seeded schema. Extend further if a later announcement exists.
-  const minEnd = '2026-05';
-  if (endMonth < minEnd) endMonth = minEnd;
+  const now = new Date();
+  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
+  if (endMonth < currentMonth) endMonth = currentMonth;
 
   const months = [...monthRange(FIRST_DIV_MONTH, endMonth)];
 
