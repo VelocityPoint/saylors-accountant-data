@@ -50,6 +50,17 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
+// Strip HTML tags so the regex parsers below can operate on plain text from
+// iXBRL HTM filings the same way they do on pdftotext .txt output.
+// Entity decoding is intentionally omitted — all target patterns (STRC,
+// "maintain", "commencing on or after", percentages, month names) are plain
+// ASCII with no HTML entities, so decoding adds no value.
+function stripHtml(html) {
+  return html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
 const FILINGS_DIR = fileURLToPath(new URL('../filings/8-K/', import.meta.url));
 const OUT_CSV = fileURLToPath(new URL('../strc-rate-history.csv', import.meta.url));
 
@@ -151,6 +162,26 @@ function parseIpo(filename, text) {
   };
 }
 
+// Returns { effectiveDate, effectiveMonth, newRate, sourceFile } for
+// "maintain...commencing on or after <date> at <rate>%" 8-Ks.
+// Strategy files this format when the rate is held unchanged month-to-month;
+// instead of "from X% to Y%", the announcement reads "at Y%" with no prior
+// rate cited. Seen first in the 2026-05-01 8-K (iXBRL HTM format).
+function parseMaintenance(filename, text) {
+  const flat = text.replace(/\s+/g, ' ');
+  const re = /maintain\s+the\s+regular\s+dividend\s+rate[^.]*?commencing\s+on\s+or\s+after\s+(\w+\s+\d{1,2},\s*\d{4})\s+at\s+(\d+(?:\.\d+)?)%/i;
+  const m = flat.match(re);
+  if (!m) return null;
+  const effectiveDate = parseMonthDate(m[1]);
+  if (!effectiveDate) return null;
+  return {
+    effectiveDate,
+    effectiveMonth: monthOf(effectiveDate),
+    newRate: Number(m[2]) / 100,
+    sourceFile: filename,
+  };
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
@@ -159,10 +190,15 @@ function main() {
     process.exit(2);
   }
 
-  const txtFiles = readdirSync(FILINGS_DIR)
-    .filter((f) => f.endsWith('.txt'))
+  // Process both pdftotext .txt files AND iXBRL .htm files. HTM filings
+  // started appearing in early 2026; pdftotext can't convert them, but their
+  // STRC rate announcements are plain prose inside the HTML that stripHtml()
+  // can expose for the same regex patterns.
+  const allFiles = readdirSync(FILINGS_DIR)
+    .filter((f) => f.endsWith('.txt') || f.endsWith('.htm'))
     .sort();
 
+  const txtFiles = allFiles.filter((f) => f.endsWith('.txt'));
   if (txtFiles.length === 0) {
     console.error('extract-strc-rates: no .txt files found. Run pdftotext-8ks.mjs first.');
     process.exit(2);
@@ -171,10 +207,11 @@ function main() {
   // ── Find IPO 8-K and rate-change 8-Ks ──
   let ipo = null;
   const announcements = [];
+  const maintenances = [];
 
-  for (const f of txtFiles) {
-    const path = FILINGS_DIR + f;
-    const text = readFileSync(path, 'utf8');
+  for (const f of allFiles) {
+    const raw = readFileSync(FILINGS_DIR + f, 'utf8');
+    const text = f.endsWith('.htm') ? stripHtml(raw) : raw;
     if (!text.includes('STRC')) continue;
 
     if (f.startsWith('2025-07-29_') && !ipo) {
@@ -182,6 +219,8 @@ function main() {
     }
     const adj = parseAdjustment(f, text);
     if (adj) announcements.push(adj);
+    const maint = parseMaintenance(f, text);
+    if (maint) maintenances.push(maint);
   }
 
   if (!ipo) {
@@ -190,9 +229,13 @@ function main() {
   }
 
   announcements.sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
+  maintenances.sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
   console.log(`extract-strc-rates: found IPO rate ${(ipo.initialRate * 100).toFixed(2)}% from ${ipo.sourceFile}`);
   for (const a of announcements) {
     console.log(`  rate-change 8-K ${a.sourceFile}: ${(a.oldRate * 100).toFixed(2)}% → ${(a.newRate * 100).toFixed(2)}% effective ${a.effectiveDate}`);
+  }
+  for (const m of maintenances) {
+    console.log(`  maintenance 8-K ${m.sourceFile}: ${(m.newRate * 100).toFixed(2)}% maintained effective ${m.effectiveDate}`);
   }
 
   // ── Determine end month ──
@@ -250,6 +293,33 @@ function main() {
           rate: a.oldRate,
           source: 'backref',
           note: `Rate of ${(a.oldRate * 100).toFixed(2)}% back-derived from "from ${(a.oldRate * 100).toFixed(2)}%" reference in 8-K dated ${a.sourceFile.slice(0, 10)}.`,
+        });
+      }
+    }
+  }
+
+  // Maintenance confirmations — "maintain...at X%" 8-Ks. Strategy files
+  // these when the rate is held unchanged; there's no "from" rate to cite.
+  // Treat the effective month as a confirmed-rate row (source: 'maintenance')
+  // and also confirm the prior month via back-ref if it's still interpolated.
+  // A rate-change announcement for the same month takes priority.
+  for (const m of maintenances) {
+    const existing = ratesByMonth.get(m.effectiveMonth);
+    if (!existing || existing.source !== 'announcement') {
+      ratesByMonth.set(m.effectiveMonth, {
+        rate: m.newRate,
+        source: 'maintenance',
+        note: `Rate of ${(m.newRate * 100).toFixed(2)}% explicitly maintained effective ${m.effectiveDate} onwards per 8-K dated ${m.sourceFile.slice(0, 10)} ("maintain the regular dividend rate per annum ... at ${(m.newRate * 100).toFixed(2)}%").`,
+      });
+    }
+    const prior = prevMonth(m.effectiveMonth);
+    if (prior >= FIRST_DIV_MONTH) {
+      const existingPrior = ratesByMonth.get(prior);
+      if (!existingPrior || existingPrior.source === 'interpolated') {
+        ratesByMonth.set(prior, {
+          rate: m.newRate,
+          source: 'backref',
+          note: `Rate of ${(m.newRate * 100).toFixed(2)}% back-derived from maintenance-confirmation "at ${(m.newRate * 100).toFixed(2)}%" reference in 8-K dated ${m.sourceFile.slice(0, 10)}.`,
         });
       }
     }

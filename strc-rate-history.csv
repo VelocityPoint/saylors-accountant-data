@@ -7,5 +7,5 @@ period_start,annual_rate,note
 2025-12-31,0.1100,"Rate of 11.00% back-derived from ""from 11.00%"" reference in 8-K dated 2026-02-02."
 2026-01-31,0.1125,Rate increased from 11.00% to 11.25% effective 2026-02-01 per 8-K dated 2026-02-02.
 2026-02-28,0.1150,Rate increased from 11.25% to 11.50% effective 2026-03-01 per 8-K dated 2026-03-02.
-2026-03-31,0.1150,interpolated — no rate-change 8-K found; carried forward prior month rate of 11.50%.
-2026-04-30,0.1150,"Rate of 11.50% explicitly maintained effective May 1, 2026 onwards per 8-K dated 2026-05-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
+2026-03-31,0.1150,"Rate of 11.50% explicitly maintained effective 2026-04-01 onwards per 8-K dated 2026-04-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
+2026-04-30,0.1150,"Rate of 11.50% explicitly maintained effective 2026-05-01 onwards per 8-K dated 2026-05-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
