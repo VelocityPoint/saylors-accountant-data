@@ -9,6 +9,7 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { loadSchema, validateCsv, formatError } from './lib/csv-schema.mjs';
 
 // Lazy-loaded inventory of files actually present in filings/8-K/, keyed
 // by date prefix (yyyy-mm-dd) → array of full filenames sharing that date.
@@ -255,7 +256,12 @@ function raiseDelta(rowIndex, btcUsd) {
   return Number.isFinite(delta) ? delta : '';
 }
 
-const out = [HEADERS.join(',')];
+// Render each row as a structured record (header→value map) AND collect the
+// cell-string array. The structured record is what the schema validator
+// reads; the cell-string array is what gets serialized to CSV. Both come
+// from the same source so they cannot drift.
+const records = [];
+const cellRows = [];
 
 for (const [i, r] of rows.entries()) {
   const rowIndex = i + 1;
@@ -265,7 +271,7 @@ for (const [i, r] of rows.entries()) {
   const filingName = r.sec?.filename ?? '';
   const filingLocal = resolveFilingLocal(date, filingName);
 
-  out.push([
+  const cells = [
     rowIndex,
     id,
     'MSTR',
@@ -300,9 +306,33 @@ for (const [i, r] of rows.entries()) {
     raiseDelta(rowIndex, mergedField(rowIndex, 'usd_spent') ?? r.total_purchase_price),
     seeded(rowIndex, 'raise_instrument'),
     seeded(rowIndex, 'notes'),
-  ].map(csvCell).join(','));
+  ];
+
+  // Build the structured record from the same cell list — header[i] → cells[i].
+  // Empty/undefined cells become '' to match how csvCell will serialize them,
+  // which is what the validator's nullable-* types expect.
+  const record = {};
+  for (let j = 0; j < HEADERS.length; j++) {
+    const v = cells[j];
+    record[HEADERS[j]] = v === null || v === undefined ? '' : String(v);
+  }
+  records.push(record);
+  cellRows.push(cells.map(csvCell).join(','));
 }
 
+// Validate against the JSON schema BEFORE writing. Fail loudly on mismatch
+// (issue #237) so the JS→C# handoff is contract-enforced rather than
+// matched by convention. Tested in CI by the data-schema-roundtrip job.
+const schema = loadSchema('tranche');
+const report = validateCsv(schema, HEADERS, records);
+if (!report.ok) {
+  console.error('build-tranches: schema validation failed against data/schemas/tranche.schema.json');
+  for (const e of report.errors) console.error(`  - ${formatError(e)}`);
+  if (report.truncated) console.error('  (more errors suppressed)');
+  process.exit(1);
+}
+
+const out = [HEADERS.join(','), ...cellRows];
 const outPath = new URL('../tranches.csv', import.meta.url);
 writeFileSync(outPath, out.join('\n') + '\n', 'utf8');
-console.log(`wrote ${out.length - 1} rows to ${outPath.pathname}`);
+console.log(`wrote ${out.length - 1} rows to ${outPath.pathname} (schema-validated)`);
