@@ -12,7 +12,8 @@ Usage:
 --dry-run  Show what would be downloaded without downloading
 
 Outputs to: filings/{FORM_TYPE}/
-Updates:    raw/edgar-submissions.json with latest entity data
+Note:       raw/edgar-submissions.json is owned by pull-edgar-index.py;
+            this script reads EDGAR entity data in-memory only.
 """
 
 import json
@@ -155,12 +156,10 @@ def main():
         print("FATAL: Could not fetch entity data from EDGAR")
         sys.exit(1)
 
-    # Save raw entity data
+    # Ensure RAW_DIR exists for the per-pull manifest written at the end.
+    # raw/edgar-submissions.json is owned by pull-edgar-index.py — do not
+    # write it here (avoids a duplicate-writer race on the same file).
     os.makedirs(RAW_DIR, exist_ok=True)
-    entity_path = RAW_DIR / "edgar-submissions.json"
-    with open(entity_path, "w") as f:
-        json.dump(entity_data, f, indent=4)
-    print(f"  Saved entity data: {entity_path}")
 
     filings = entity_data.get("filings", {})
     recent = filings.get("recent", {})

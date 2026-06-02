@@ -7,8 +7,13 @@ comprehensive filing manifest. Does NOT download filing documents —
 that's handled by pull-cdn-filings.py for CDN-hosted docs and
 pull-all-filings.py for EDGAR Archives.
 
+This script OWNS raw/edgar-submissions.json (the entity metadata file) —
+pull-all-filings.py no longer writes it to avoid a duplicate-writer race.
+
 Usage:
-    python3 scripts/pull-edgar-index.py
+    python3 scripts/pull-edgar-index.py [--dry-run]
+
+--dry-run  Fetch and summarize but do not write any JSON outputs
 """
 
 import json
@@ -64,7 +69,11 @@ def inventory_local_filings():
 
 
 def main():
+    dry_run = "--dry-run" in sys.argv
+
     print(f"=== EDGAR Index Pull: {ENTITY_NAME} (CIK {CIK}) ===")
+    if dry_run:
+        print("[DRY-RUN] No JSON outputs will be written.")
     print()
 
     # Step 1: Fetch recent filings index
@@ -186,15 +195,21 @@ def main():
     }
 
     index_path = RAW_DIR / "edgar-filings-index.json"
-    with open(index_path, "w") as f:
-        json.dump(index_data, f, indent=2)
-    print(f"\n  Index saved: {index_path} ({len(json.dumps(index_data)):,} bytes)")
-
-    # Also update entity metadata
     entity_path = RAW_DIR / "edgar-submissions.json"
-    with open(entity_path, "w") as f:
-        json.dump(entity_data, f, indent=4)
-    print(f"  Entity data saved: {entity_path}")
+
+    if dry_run:
+        print(f"\n  [DRY-RUN] Would save index: {index_path} ({len(json.dumps(index_data)):,} bytes)")
+        print(f"  [DRY-RUN] Would save entity data: {entity_path}")
+    else:
+        with open(index_path, "w") as f:
+            json.dump(index_data, f, indent=2)
+        print(f"\n  Index saved: {index_path} ({len(json.dumps(index_data)):,} bytes)")
+
+        # Also update entity metadata — this script owns edgar-submissions.json;
+        # pull-all-filings.py no longer writes it.
+        with open(entity_path, "w") as f:
+            json.dump(entity_data, f, indent=4)
+        print(f"  Entity data saved: {entity_path}")
 
     return index_data
 
