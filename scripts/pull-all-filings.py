@@ -232,7 +232,9 @@ def main():
         print(f"  Skipped (existing): {stats['skipped']}")
         print(f"  Failed: {stats['failed']}")
     
-    # Save manifest
+    # Save manifest. Skip in dry-run: stats.failed is always 0 and the write
+    # would wipe the audit trail of which filings need --force on the next
+    # real run.
     manifest = {
         "cik": CIK,
         "entity_name": ENTITY_NAME,
@@ -246,9 +248,12 @@ def main():
         }
     }
     manifest_path = RAW_DIR / "edgar-pull-manifest.json"
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=4, default=str)
-    print(f"\n  Manifest saved: {manifest_path}")
+    if dry_run:
+        print(f"\n  [DRY-RUN] Would have written manifest with {len(forms)} entries to: {manifest_path}")
+    else:
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=4, default=str)
+        print(f"\n  Manifest saved: {manifest_path}")
 
 
 if __name__ == "__main__":

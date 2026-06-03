@@ -225,6 +225,9 @@ def main():
 
     # Save manifest — include failed_urls so the next run can target them
     # with --force and reviewers can diff what's still missing.
+    # Skip the write in dry-run: stats.failed is always 0 and failed_urls is
+    # always [], so writing would wipe the audit trail of which URLs need
+    # --force on the next real run.
     manifest = {
         "entity": "Strategy Inc",
         "cik": "0001050446",
@@ -240,9 +243,12 @@ def main():
         "failed_urls": failed_urls,
     }
     manifest_path = RAW_DIR / "cdn-filings-manifest.json"
-    with open(manifest_path, "w") as f:
-        json.dump(manifest, f, indent=4)
-    print(f"\n  Manifest saved: {manifest_path}")
+    if dry_run:
+        print(f"\n  [DRY-RUN] Would have written manifest with {len(urls)} entries to: {manifest_path}")
+    else:
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=4)
+        print(f"\n  Manifest saved: {manifest_path}")
 
 
 if __name__ == "__main__":
