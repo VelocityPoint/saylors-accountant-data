@@ -19,7 +19,7 @@ const html = readFileSync(inPath, 'utf8');
 const text = html
   .replace(/<style[\s\S]*?<\/style>/gi, ' ')
   .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-  .replace(/<[^>]+>/g, ' ')
+  .replace(/<[^>]*>/g, ' ')
   .replace(/&nbsp;/g, ' ')
   .replace(/&amp;/g, '&')
   .replace(/&#\d+;/g, ' ')
