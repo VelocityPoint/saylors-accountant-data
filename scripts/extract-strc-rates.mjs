@@ -35,9 +35,22 @@
 // `period_start` is the date the rate becomes effective for the month,
 // matching how the loader's `RateOn(date)` lookup is used:
 //   - Row 1 → period_start = 2025-07-29 (IPO declaration date, covers Aug)
-//   - Rows 2-N → period_start = end-of-prior-month (e.g. 2025-08-31 for
-//     September's rate). This matches the seeded-PLACEHOLDER cadence and
-//     keeps the loader's at-or-before semantics intact.
+//   - Rows 2-N → period_start = FIRST day of the dividend month (e.g.
+//     2025-09-01 for September's rate).
+//
+// Why first-of-month and NOT end-of-prior-month (the prior convention):
+// the loader's RateOn(date) is queried with `periodEnd` dates the burn loop
+// computes via DateOnly.AddMonths(p). For a tranche purchased on day 29/30/31,
+// AddMonths clamps the day into a short month (e.g. 2025-07-29 + 7 months →
+// 2026-02-28). With the OLD end-of-prior-month convention the March-rate row
+// also sat on 2026-02-28, so the loader's at-or-before (`<=`) tie-break
+// returned March's 11.50% for what is really the FEBRUARY dividend period
+// (should be 11.25%) — over-stating that period's burn. First-of-month
+// anchoring is strictly less than every AddMonths-clamped period_end within
+// the same calendar month (those are always ≥ day 1) and strictly greater
+// than the prior month's anchor, so the `<=` lookup lands on the correct
+// month for ALL day-of-month values, eliminating the clamp-collision class.
+// See StrcRateHistory.RateOn and TranchePartSummarizer.Summarize.
 //
 // The script is idempotent and strict-exit:
 //   - exits non-zero if (a) any expected month is missing, (b) any rate is
@@ -69,6 +82,29 @@ const OUT_CSV = fileURLToPath(new URL('../strc-rate-history.csv', import.meta.ur
 // latest 8-K-effective date so the table always has a "current month"
 // row, even if a rate-change 8-K hasn't dropped for it yet.
 const FIRST_DIV_MONTH = '2025-08'; // August 2025
+
+// Primary-source rates that are NOT extractable from the 8-K regex patterns
+// below, because Strategy announced these particular monthly resets only via
+// the strategy.com/strc website rate card (no standalone "Adjustment to
+// Dividend Rate" 8-K with "from X% to Y%" prose). They ARE documented in
+// other primary filings, so we treat them as known-good and let them override
+// the carry-forward interpolation (but NOT a direct rate-change 8-K, which
+// stays authoritative if one ever appears for these months).
+//
+// Sources:
+//   2025-09 (10.00%) — Q3-2025 10-Q (filed 2025-09-30) declaration table:
+//     "STRC Month ended September 30, 2025 ... 10.00% $0.833333333"; also the
+//     rate-progression chart in the 8-K dated 2025-12-01 (9.00 / 10.00 /
+//     10.25 / 10.50 / 10.75).
+//   2025-10 (10.25%) — Q3-2025 10-Q: "increased the monthly regular dividend
+//     rate per annum on STRC Stock from 10.00% to 10.25% effective for monthly
+//     periods commencing on or after October 1, 2025"; same 2025-12-01 chart.
+// Without these, the carry-forward gap-fill would seed both months at 9.00%,
+// under-stating realized STRC burn by ~46 BTC on the IPO tranche. (#466)
+const KNOWN_RATES = new Map([
+  ['2025-09', { rate: 0.1000, source: 'Q3-2025 10-Q declaration table + 2025-12-01 8-K rate chart' }],
+  ['2025-10', { rate: 0.1025, source: 'Q3-2025 10-Q ("from 10.00% to 10.25% ... October 1, 2025") + 2025-12-01 8-K rate chart' }],
+]);
 
 // ── Date helpers ────────────────────────────────────────────────────────────
 
@@ -111,23 +147,23 @@ function* monthRange(start, end) {
   }
 }
 
-function lastDayOfPriorMonth(yyyymm) {
-  // "2025-09" → "2025-08-31" (last day of August). Used to pick the
-  // period_start for September's rate: announcement-grade date that's
-  // the end of the prior month.
+function firstOfMonth(yyyymm) {
+  // "2025-09" → "2025-09-01" (first day of the dividend month). This is the
+  // period_start anchor for a month's rate.
   //
-  // Uses the JS Date trick: day 0 of month N is the last day of month N-1.
-  // Handles leap years correctly (Feb 2028 → 29 days). The prior hardcoded
-  // 28-day February broke for any year with Feb 29 once the script's end
-  // month started auto-extending forward via the dynamic floor (#250 PR;
-  // Copilot caught the leap-year regression on review).
-  const prev = prevMonth(yyyymm);
-  const [y, m] = prev.split('-').map(Number);
-  // new Date(year, monthIndex, 0) returns the last day of the prior month
-  // (monthIndex is 0-based, so passing 1-based m here gives us "day 0 of
-  // month m+1" = last day of month m). UTC to avoid local-timezone drift.
-  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  return `${y}-${String(m).padStart(2, '0')}-${String(days).padStart(2, '0')}`;
+  // Replaces the prior `lastDayOfPriorMonth` (end-of-prior-month) anchor,
+  // which collided with DateOnly.AddMonths day-clamping in the burn loop and
+  // mis-attributed the Feb dividend period to March's rate for day-29+
+  // tranches (the `<=` tie-break in StrcRateHistory.RateOn matched the
+  // next month's row when AddMonths clamped a day-29/30/31 purchase into a
+  // short month). First-of-month is strictly inside the dividend month and
+  // strictly before any AddMonths-clamped period_end in that month, so the
+  // loader's at-or-before lookup lands on the correct month for every
+  // day-of-month value. See the Row-convention block at the top of this file.
+  //
+  // No leap-year hazard here (day is always 01), but the helper is kept pure
+  // string-math for symmetry with monthRange/nextMonth/prevMonth.
+  return `${yyyymm}-01`;
 }
 
 // ── 8-K parsing ────────────────────────────────────────────────────────────
@@ -325,6 +361,21 @@ function main() {
     }
   }
 
+  // Known rates from non-8-K primary sources (10-Q declaration tables, the
+  // 2025-12-01 rate-progression chart). These override carry-forward
+  // interpolation but defer to a direct rate-change 8-K (source 'announcement')
+  // or a maintenance-confirmation 8-K, both of which are more specific.
+  for (const [month, known] of KNOWN_RATES) {
+    const existing = ratesByMonth.get(month);
+    if (!existing || (existing.source !== 'announcement' && existing.source !== 'maintenance')) {
+      ratesByMonth.set(month, {
+        rate: known.rate,
+        source: 'known-primary-source',
+        note: `Rate of ${(known.rate * 100).toFixed(2)}% per primary source: ${known.source}. (No standalone rate-change 8-K; announced via strategy.com/strc rate card.)`,
+      });
+    }
+  }
+
   // Fill gaps by carrying forward the previous month's rate.
   let prevRate = ipo.initialRate;
   for (const month of months) {
@@ -366,13 +417,15 @@ function main() {
   // period_start convention:
   //   - First dividend month → use the IPO declaration date (2025-07-29)
   //     so RateOn(any date ≥ IPO) returns the initial rate.
-  //   - Subsequent months → use the last day of the prior calendar month
-  //     (the announcement-date pattern Strategy follows: rate-change 8-Ks
-  //     are filed the day before the new monthly period commences).
+  //   - Subsequent months → use the FIRST day of the dividend month
+  //     (2025-09-01 for September's rate). This avoids the DateOnly.AddMonths
+  //     day-clamp collision the prior end-of-prior-month anchor had with the
+  //     loader's `<=` tie-break — see the Row-convention block at the top of
+  //     this file and StrcRateHistory.RateOn.
   const rows = [];
   for (const month of months) {
     const entry = ratesByMonth.get(month);
-    const periodStart = month === FIRST_DIV_MONTH ? '2025-07-29' : lastDayOfPriorMonth(month);
+    const periodStart = month === FIRST_DIV_MONTH ? '2025-07-29' : firstOfMonth(month);
     rows.push({
       period_start: periodStart,
       annual_rate: entry.rate.toFixed(4),

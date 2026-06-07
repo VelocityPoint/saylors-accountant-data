@@ -1,12 +1,12 @@
 period_start,annual_rate,note
-2025-07-29,0.0900,"Initial rate per IPO 8-K dated 2025-07-29 (""initial monthly regular dividend rate per annum is 9.00%"")."
-2025-08-31,0.0900,interpolated — no rate-change 8-K found; carried forward prior month rate of 9.00%.
-2025-09-30,0.0900,interpolated — no rate-change 8-K found; carried forward prior month rate of 9.00%.
-2025-10-31,0.1050,"Rate of 10.50% back-derived from ""from 10.50%"" reference in 8-K dated 2025-12-01."
-2025-11-30,0.1075,Rate increased from 10.50% to 10.75% effective 2025-12-01 per 8-K dated form-8-k_1.
-2025-12-31,0.1100,"Rate of 11.00% back-derived from ""from 11.00%"" reference in 8-K dated 2026-02-02."
-2026-01-31,0.1125,Rate increased from 11.00% to 11.25% effective 2026-02-01 per 8-K dated form-8-k_0.
-2026-02-28,0.1150,Rate increased from 11.25% to 11.50% effective 2026-03-01 per 8-K dated form-8-k_0.
-2026-03-31,0.1150,"Rate of 11.50% explicitly maintained effective 2026-04-01 onwards per 8-K dated 2026-04-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
-2026-04-30,0.1150,"Rate of 11.50% explicitly maintained effective 2026-05-01 onwards per 8-K dated 2026-05-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
-2026-05-31,0.1150,"Rate of 11.50% explicitly maintained effective 2026-06-01 onwards per 8-K dated 2026-06-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
+2025-07-29,0.0900,"Initial rate per IPO 8-K dated 2025-07-29 (""initial monthly regular dividend rate per annum is 9.00%""). Covers the August 2025 dividend month."
+2025-09-01,0.1000,"September 2025 dividend month = 10.00% per annum. Source: Q3-2025 10-Q (2025-09-30) declaration table (""STRC Month ended September 30, 2025 ... 10.00% $0.833333333"") and the rate-progression chart in the 8-K dated 2025-12-01 (9.00% / 10.00% / 10.25% / 10.50% / 10.75%). Announced via strategy.com/strc rate card, not a standalone rate-change 8-K."
+2025-10-01,0.1025,"October 2025 dividend month = 10.25% per annum. Source: Q3-2025 10-Q (""increased the monthly regular dividend rate per annum on STRC Stock from 10.00% to 10.25% effective for monthly periods commencing on or after October 1, 2025"") and the 8-K-dated-2025-12-01 rate chart. Announced via website rate card."
+2025-11-01,0.1050,"November 2025 dividend month = 10.50% per annum. Source: Q3-2025 10-Q (""increased regular dividends on STRC Stock, most recently on October 30, 2025, from 10.25% per annum to 10.50% per annum for the monthly period commencing on or after November 1, 2025"")."
+2025-12-01,0.1075,"December 2025 dividend month = 10.75% per annum. Source: 8-K dated 2025-12-01 (""On November 30, 2025, Strategy increased the regular dividend rate per annum on the STRC Stock effective for monthly periods commencing on or after December 1, 2025 from 10.50% to 10.75%""; footnote confirms the $0.896 monthly dividend = 10.75% per annum)."
+2026-01-01,0.1100,"January 2026 dividend month = 11.00% per annum. Back-derived from the ""from 11.00%"" reference in the 8-K dated 2026-02-02 (the 2026-02 rate-change announcement)."
+2026-02-01,0.1125,"February 2026 dividend month = 11.25% per annum. Rate increased from 11.00% to 11.25% effective for monthly periods commencing on or after 2026-02-01 per 8-K dated 2026-02-02."
+2026-03-01,0.1150,"March 2026 dividend month = 11.50% per annum. Rate increased from 11.25% to 11.50% effective for monthly periods commencing on or after 2026-03-01 per 8-K dated 2026-03-02."
+2026-04-01,0.1150,"April 2026 dividend month = 11.50% per annum. Rate explicitly maintained at 11.50% effective for monthly periods commencing on or after 2026-04-01 per 8-K dated 2026-04-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
+2026-05-01,0.1150,"May 2026 dividend month = 11.50% per annum. Rate explicitly maintained at 11.50% effective for monthly periods commencing on or after 2026-05-01 per 8-K dated 2026-05-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
+2026-06-01,0.1150,"June 2026 dividend month = 11.50% per annum. Rate explicitly maintained at 11.50% effective for monthly periods commencing on or after 2026-06-01 per 8-K dated 2026-06-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
