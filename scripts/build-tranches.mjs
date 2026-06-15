@@ -1,6 +1,6 @@
 // Build tranches.csv from the raw strategy.com/purchases __NEXT_DATA__ dump.
 //
-// One row per BTC purchase disclosure (107 rows). Funding source and raise
+// One row per BTC purchase disclosure. Funding source and raise
 // proceeds are mostly TBD and will be filled in as we read each 8-K; a
 // handful of rows are seeded with values already verified against the
 // underlying filing.
