@@ -18,22 +18,19 @@
 //      *prior* month's rate without a separate 8-K.
 //
 // What we *cannot* extract:
-//   - Months between known rate points where Strategy adjusted the rate but
-//     filed only a website-rate-card update (no 8-K). For those we
-//     interpolate from the bracketing announcements and tag the note as
-//     "interpolated — no rate-change 8-K found". The script flags these in
-//     stderr so a human can spot-check.
+//   - Months where Strategy has not published a primary-source STRC rate
+//     setting. The committed CSV must stay primary-sourced, so the script
+//     stops at the latest sourced month and fails before writing if any
+//     interior row would require interpolation.
 //
 // Schema match (`StrcRateHistory.cs`):
 //   period_start (yyyy-MM-dd), annual_rate (decimal, e.g. 0.0900), note (str)
 //
 // Row convention: one row per dividend month from August 2025 (the first
-// STRC dividend after the 2025-07-29 IPO) through whichever is later: the
-// latest 8-K-effective month, or the current calendar month. The CSV grows
-// by one row per month going forward; date helpers below handle leap years
-// correctly so the auto-extension is safe past Feb 2028. Each row's
-// `period_start` is the date the rate becomes effective for the month,
-// matching how the loader's `RateOn(date)` lookup is used:
+// STRC dividend after the 2025-07-29 IPO) through the latest primary-sourced
+// rate month. The CSV grows only when a source file confirms the month's rate.
+// Each row's `period_start` is the date the rate becomes effective for the
+// month, matching how the loader's `RateOn(date)` lookup is used:
 //   - Row 1 → period_start = 2025-07-29 (IPO declaration date, covers Aug)
 //   - Rows 2-N → period_start = FIRST day of the dividend month (e.g.
 //     2025-09-01 for September's rate).
@@ -53,10 +50,11 @@
 // See StrcRateHistory.RateOn and TranchePartSummarizer.Summarize.
 //
 // The script is idempotent and strict-exit:
-//   - exits non-zero if (a) any expected month is missing, (b) any rate is
+//   - exits non-zero if (a) any expected month is missing, (b) any expected
+//     month would require an interpolated carry-forward row, (c) any rate is
 //     not a multiple of 0.0025 (sanity: Strategy moves the rate in 25bp
 //     increments per the S-1 max-decrease rule and observed practice), or
-//     (c) the IPO 8-K can't be parsed.
+//     (d) the IPO 8-K can't be parsed.
 //
 // Usage: node data/saylors-accountant/scripts/extract-strc-rates.mjs
 
@@ -77,10 +75,11 @@ function stripHtml(html) {
 const FILINGS_DIR = fileURLToPath(new URL('../filings/8-K/', import.meta.url));
 const OUT_CSV = fileURLToPath(new URL('../strc-rate-history.csv', import.meta.url));
 
-// Calendar months we expect to cover. STRC IPO'd 2025-07-29 → first
-// dividend month is August 2025. We extend through one month past the
-// latest 8-K-effective date so the table always has a "current month"
-// row, even if a rate-change 8-K hasn't dropped for it yet.
+// Calendar months we expect to cover. STRC IPO'd 2025-07-29 -> first
+// dividend month is August 2025. We extend through the latest month backed by
+// a rate-change 8-K, maintenance-confirmation 8-K, or explicit known primary
+// source. Dates beyond the final row naturally use the last known sourced rate
+// via StrcRateHistory.RateOn; they do not need an unsourced current-month row.
 const FIRST_DIV_MONTH = '2025-08'; // August 2025
 
 // Primary-source rates that are NOT extractable from the 8-K regex patterns
@@ -275,24 +274,21 @@ function main() {
   }
 
   // ── Determine end month ──
-  // Extend the table out to whichever is later: the latest announcement's
-  // effective month, or the current calendar month. The current-month
-  // floor ensures the "current month" row always exists in the CSV even
-  // before that month's rate-change 8-K is filed (the page's RateOn(date)
-  // lookup would otherwise fall off the end of the table).
-  //
-  // Used to be hardcoded '2026-05' (#250 sub-item 3) — that worked when
-  // the script first shipped in early 2026 but doesn't auto-extend, so
-  // the floor stops doing useful work as soon as the calendar advances
-  // past it. Replaced with a clock-derived current-month value so the
-  // floor moves forward each month without touching this script.
+  // Extend only through the latest primary-sourced month. Do not add a
+  // clock-derived current-month floor here: if Strategy has not published a
+  // source for the current month, writing an interpolated row would trip the
+  // committed-data guard and make the historical rate table look sourced when
+  // it is not.
   let endMonth = FIRST_DIV_MONTH;
   for (const a of announcements) {
     if (a.effectiveMonth > endMonth) endMonth = a.effectiveMonth;
   }
-  const now = new Date();
-  const currentMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
-  if (endMonth < currentMonth) endMonth = currentMonth;
+  for (const m of maintenances) {
+    if (m.effectiveMonth > endMonth) endMonth = m.effectiveMonth;
+  }
+  for (const [month] of KNOWN_RATES) {
+    if (month > endMonth) endMonth = month;
+  }
 
   const months = [...monthRange(FIRST_DIV_MONTH, endMonth)];
 
@@ -399,6 +395,10 @@ function main() {
       bad++;
       continue;
     }
+    if (entry.source === 'interpolated') {
+      console.error(`extract-strc-rates: ${month} would be interpolated; add a primary source or cap the range before writing.`);
+      bad++;
+    }
     // 25 bp granularity. Strategy moves the rate in 25bp increments per the
     // S-1 max-decrease rule and observed practice (every announcement to
     // date has been a clean +25bp).
@@ -440,26 +440,10 @@ function main() {
   writeFileSync(OUT_CSV, header + body + '\n');
 
   // ── Report ──
-  const interpolated = months.filter((m) => ratesByMonth.get(m).source === 'interpolated');
   console.log(`\nWrote ${rows.length} monthly rows to ${OUT_CSV}`);
   for (const m of months) {
     const entry = ratesByMonth.get(m);
     console.log(`  ${m}: ${(entry.rate * 100).toFixed(2)}% [${entry.source}]`);
-  }
-  if (interpolated.length > 0) {
-    console.error(`\nInterpolated months (no rate-change 8-K found, prior rate carried forward):`);
-    for (const m of interpolated) {
-      const entry = ratesByMonth.get(m);
-      console.error(`  ${m}: ${(entry.rate * 100).toFixed(2)}%`);
-    }
-    console.error(`\nNote: where two adjacent known rates differ by more than 25 bp,`);
-    console.error(`the carry-forward strategy produces a single large step at the next`);
-    console.error(`announced rate. Strategy moves the rate in 25 bp increments per the`);
-    console.error(`S-1 max-decrease formula and observed practice; the actual monthly`);
-    console.error(`trajectory between bracketing announcements is not knowable from 8-Ks`);
-    console.error(`alone (intermediate adjustments may have been pushed only via the`);
-    console.error(`strategy.com/strc rate card). Spot-check against external sources`);
-    console.error(`if you need monthly fidelity for the interpolated rows.`);
   }
 }
 
