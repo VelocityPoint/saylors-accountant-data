@@ -16,6 +16,9 @@
 //      Stock] effective for monthly periods commencing on or after <date>
 //      from <old>% to <new>%`. The "from <old>%" lets us back-fill the
 //      *prior* month's rate without a separate 8-K.
+//   3. The June 29, 2026 semi-monthly transition announcement — uses
+//      "effective for semi-monthly periods with record dates on or after ...
+//      to 12.00%" without a "from" rate.
 //
 // What we *cannot* extract:
 //   - Months where Strategy has not published a primary-source STRC rate
@@ -52,8 +55,8 @@
 // The script is idempotent and strict-exit:
 //   - exits non-zero if (a) any expected month is missing, (b) any expected
 //     month would require an interpolated carry-forward row, (c) any rate is
-//     not a multiple of 0.0025 (sanity: Strategy moves the rate in 25bp
-//     increments per the S-1 max-decrease rule and observed practice), or
+//     not a multiple of 0.0025 (sanity: rates stay on the 25bp grid, although
+//     an announcement may move more than one step), or
 //     (d) the IPO 8-K can't be parsed.
 //
 // Usage: node data/saylors-accountant/scripts/extract-strc-rates.mjs
@@ -174,15 +177,36 @@ function parseAdjustment(filename, text) {
   const flat = text.replace(/\s+/g, ' ');
   const re = /commencing\s+on\s+or\s+after\s+(\w+\s+\d{1,2},\s*\d{4})\s+from\s+(\d+(?:\.\d+)?)%\s+to\s+(\d+(?:\.\d+)?)%/i;
   const m = flat.match(re);
-  if (!m) return null;
-  const effectiveDate = parseMonthDate(m[1]);
+  if (m) {
+    const effectiveDate = parseMonthDate(m[1]);
+    if (!effectiveDate) return null;
+    return {
+      effectiveDate,
+      effectiveMonth: monthOf(effectiveDate),
+      oldRate: Number(m[2]) / 100,
+      newRate: Number(m[3]) / 100,
+      sourceFile: filename,
+      cadence: 'monthly',
+    };
+  }
+
+  // The June 29, 2026 filing introduced the semi-monthly cadence and raised
+  // STRC directly to 12.00% without restating the prior 11.50% rate:
+  // "effective for semi-monthly periods with record dates on or after
+  // July 1, 2026, to 12.00%."
+  const semiMonthly = flat.match(
+    /increase\s+the\s+regular\s+dividend\s+rate[^.]*?effective\s+for\s+semi-monthly\s+periods\s+with\s+record\s+dates\s+on\s+or\s+after\s+(\w+\s+\d{1,2},\s*\d{4}),?\s+to\s+(\d+(?:\.\d+)?)%/i,
+  );
+  if (!semiMonthly) return null;
+  const effectiveDate = parseMonthDate(semiMonthly[1]);
   if (!effectiveDate) return null;
   return {
     effectiveDate,
     effectiveMonth: monthOf(effectiveDate),
-    oldRate: Number(m[2]) / 100,
-    newRate: Number(m[3]) / 100,
+    oldRate: null,
+    newRate: Number(semiMonthly[2]) / 100,
     sourceFile: filename,
+    cadence: 'semi-monthly',
   };
 }
 
@@ -267,7 +291,10 @@ function main() {
   maintenances.sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate));
   console.log(`extract-strc-rates: found IPO rate ${(ipo.initialRate * 100).toFixed(2)}% from ${ipo.sourceFile}`);
   for (const a of announcements) {
-    console.log(`  rate-change 8-K ${a.sourceFile}: ${(a.oldRate * 100).toFixed(2)}% → ${(a.newRate * 100).toFixed(2)}% effective ${a.effectiveDate}`);
+    const change = a.oldRate === null
+      ? `to ${(a.newRate * 100).toFixed(2)}%`
+      : `${(a.oldRate * 100).toFixed(2)}% → ${(a.newRate * 100).toFixed(2)}%`;
+    console.log(`  rate-change 8-K ${a.sourceFile}: ${change} effective ${a.effectiveDate}`);
   }
   for (const m of maintenances) {
     console.log(`  maintenance 8-K ${m.sourceFile}: ${(m.newRate * 100).toFixed(2)}% maintained effective ${m.effectiveDate}`);
@@ -315,10 +342,12 @@ function main() {
     ratesByMonth.set(a.effectiveMonth, {
       rate: a.newRate,
       source: 'announcement',
-      note: `Rate increased from ${(a.oldRate * 100).toFixed(2)}% to ${(a.newRate * 100).toFixed(2)}% effective ${a.effectiveDate} per 8-K dated ${a.sourceFile.slice(0, 10)}.`,
+      note: a.oldRate === null
+        ? `Rate increased to ${(a.newRate * 100).toFixed(2)}% effective for ${a.cadence} periods with record dates on or after ${a.effectiveDate} per 8-K dated ${a.sourceFile.slice(0, 10)}.`
+        : `Rate increased from ${(a.oldRate * 100).toFixed(2)}% to ${(a.newRate * 100).toFixed(2)}% effective ${a.effectiveDate} per 8-K dated ${a.sourceFile.slice(0, 10)}.`,
     });
     const prior = prevMonth(a.effectiveMonth);
-    if (prior >= FIRST_DIV_MONTH) {
+    if (a.oldRate !== null && prior >= FIRST_DIV_MONTH) {
       const existing = ratesByMonth.get(prior);
       if (!existing || (existing.source !== 'announcement' && existing.source !== 'backref')) {
         ratesByMonth.set(prior, {
@@ -399,9 +428,8 @@ function main() {
       console.error(`extract-strc-rates: ${month} would be interpolated; add a primary source or cap the range before writing.`);
       bad++;
     }
-    // 25 bp granularity. Strategy moves the rate in 25bp increments per the
-    // S-1 max-decrease rule and observed practice (every announcement to
-    // date has been a clean +25bp).
+    // 25 bp grid. The S-1 constrains decreases and every published rate lands
+    // on this grid, but the June 29, 2026 announcement moved +50bp in one step.
     const stepped = Math.round(entry.rate * 10000);
     if (stepped % 25 !== 0) {
       console.error(`extract-strc-rates: ${month} rate ${entry.rate} not a multiple of 0.0025`);
