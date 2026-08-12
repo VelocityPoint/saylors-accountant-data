@@ -3,10 +3,10 @@ period_start,annual_rate,note
 2025-09-01,0.1000,Rate of 10.00% per primary source: Q3-2025 10-Q declaration table + 2025-12-01 8-K rate chart. (No standalone rate-change 8-K; announced via strategy.com/strc rate card.)
 2025-10-01,0.1025,"Rate of 10.25% per primary source: Q3-2025 10-Q (""from 10.00% to 10.25% ... October 1, 2025"") + 2025-12-01 8-K rate chart. (No standalone rate-change 8-K; announced via strategy.com/strc rate card.)"
 2025-11-01,0.1050,"Rate of 10.50% back-derived from ""from 10.50%"" reference in 8-K dated 2025-12-01."
-2025-12-01,0.1075,Rate increased from 10.50% to 10.75% effective 2025-12-01 per 8-K dated 2025-12-01.
+2025-12-01,0.1075,Rate increased from 10.50% to 10.75% effective 2025-12-01 per 8-K dated form-8-k_1.
 2026-01-01,0.1100,"Rate of 11.00% back-derived from ""from 11.00%"" reference in 8-K dated 2026-02-02."
-2026-02-01,0.1125,Rate increased from 11.00% to 11.25% effective 2026-02-01 per 8-K dated 2026-02-02.
-2026-03-01,0.1150,Rate increased from 11.25% to 11.50% effective 2026-03-01 per 8-K dated 2026-03-02.
+2026-02-01,0.1125,Rate increased from 11.00% to 11.25% effective 2026-02-01 per 8-K dated form-8-k_0.
+2026-03-01,0.1150,Rate increased from 11.25% to 11.50% effective 2026-03-01 per 8-K dated form-8-k_0.
 2026-04-01,0.1150,"Rate of 11.50% explicitly maintained effective 2026-04-01 onwards per 8-K dated 2026-04-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
 2026-05-01,0.1150,"Rate of 11.50% explicitly maintained effective 2026-05-01 onwards per 8-K dated 2026-05-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
 2026-06-01,0.1150,"Rate of 11.50% explicitly maintained effective 2026-06-01 onwards per 8-K dated 2026-06-01 (""maintain the regular dividend rate per annum ... at 11.50%"")."
